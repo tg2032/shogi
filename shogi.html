@@ -874,6 +874,7 @@ function chooseAIMove(level,cap){
   deadline=start+budget;
   if(level==='beginner'||level==='easy'){
     const scored=[];
+    orderMoves(roots);
     try{
       for(const m of roots){
         const mover=turn;
@@ -889,12 +890,12 @@ function chooseAIMove(level,cap){
         }finally{
           revertMove(m,info);
         }
-        scored.push({m,s:s-extra});
+        scored.push({m,s:s-extra,raw:s});
       }
     }catch(e){}
     if(!scored.length)return roots[0];
     scored.sort((a,b)=>b.s-a.s);
-    rootScore=scored[0].s;
+    rootScore=scored[0].raw;
     const pw=POOLW[level]||0;
     const pool=pw>0?scored.filter(x=>x.s>=scored[0].s-pw):scored.slice(0,1);
     return pool[(Math.random()*pool.length)|0].m;
@@ -907,6 +908,7 @@ function chooseAIMove(level,cap){
     let alpha=-Infinity;
     let dBest=null;
     let dScore=-Infinity;
+    let dRaw=-Infinity;
     let searched=0;
     const ordered=roots.slice().sort((a,b)=>(scores.get(b.f+':'+b.t+':'+(b.d||'')+':'+(b.pr?1:0))||0)-(scores.get(a.f+':'+a.t+':'+(a.d||'')+':'+(a.pr?1:0))||0));
     try{
@@ -928,20 +930,21 @@ function chooseAIMove(level,cap){
         }finally{
           revertMove(m,info);
         }
+        const raw=s;
         s-=extra;
         scores.set(m.f+':'+m.t+':'+(m.d||'')+':'+(m.pr?1:0),s);
         searched++;
-        if(s>dScore){dScore=s;dBest=m;}
+        if(s>dScore){dScore=s;dBest=m;dRaw=raw;}
         if(s>alpha)alpha=s;
         if(performance.now()>deadline)throw 0;
       }
     }catch(e){
-      if(dBest&&searched>=2){best=dBest;bestScore=dScore;}
+      if(dBest&&searched>=2){best=dBest;bestScore=dRaw;}
       break;
     }
     if(dBest){
       best=dBest;
-      bestScore=dScore;
+      bestScore=dRaw;
       if(dScore>=MATE-1000)break;
     }
     if(performance.now()-start>budget*0.6)break;
@@ -1175,13 +1178,13 @@ function doPlayerMove(m){
   afterMove();
 }
 function sameNameCands(m,p){
-  const out=[];
+  const out=[],seen=new Set();
   for(const x of legalMoves()){
-    if(x.d||x.t!==m.t)continue;
-    if((x.pr?1:0)!==(m.pr?1:0))continue;
+    if(x.d||x.t!==m.t||seen.has(x.f))continue;
     const q=board[x.f];
-    if(!q||q.t!==p.t||q.o!==p.o)continue;
-    out.push(x);
+    if(!q||q.t!==p.t||q.o!==p.o||q.pr!==p.pr)continue;
+    seen.add(x.f);
+    out.push(x.f===m.f?m:x);
   }
   return out;
 }

@@ -11,4 +11,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: node test/engine.test.js
+      - name: Engine tests
+        run: node test/engine.test.js
+      - name: UI tests (jsdom)
+        run: |
+          npm i --no-save --no-package-lock jsdom
+          node test/ui.test.js

@@ -19,10 +19,14 @@
 ## 開発
 
 エンジン部分は `shogi.html` 内の `<script id="engineSrc">` にあります。
-依存なしのテストを Node.js（18+）で実行できます。
+テストは Node.js（18+）で実行できます。
 
 ```bash
-node test/engine.test.js
+node test/engine.test.js                  # 依存なし
+npm i --no-save jsdom && node test/ui.test.js   # UI（jsdom）
 ```
 
-perft、ハッシュの整合、打ち歩詰め・二歩、強制成り、詰みの発見、入玉宣言、全難易度の自己対局を確認します。
+- `engine.test.js`: perft、ハッシュの整合、打ち歩詰め・二歩、強制成り、詰みの発見、入玉宣言、全難易度の自己対局
+- `ui.test.js`: 先手・後手それぞれの詰み・入玉宣言・投了・持将棋、AIの宣言、自動保存と再開、棋譜の安全な描画、KIF 出力
+
+CI（GitHub Actions）で push のたびに両方を実行します。

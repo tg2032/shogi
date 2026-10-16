@@ -1722,10 +1722,10 @@ const SAVE_KEY='shogi_autosave';
 function saveGame(){
   try{
     if(gameOver||!moveLog.length){lsDel(SAVE_KEY);return;}
-    lsSet(SAVE_KEY,JSON.stringify({v:1,level:readLevel(),snap:snapshot()}));
+    lsSet(SAVE_KEY,JSON.stringify({v:1,level:readLevel(),snap:snapshot(),undo:undoStack.slice(-6)}));
   }catch(x){}
 }
-function validSnap(s){
+function validSnap(s,allowEmptyLog){
   if(!s||typeof s!=='object'||Array.isArray(s))return false;
   if(!Array.isArray(s.board)||s.board.length!==81)return false;
   for(let i=0;i<81;i++){
@@ -1746,7 +1746,7 @@ function validSnap(s){
     }
   }
   if(s.turn!==0&&s.turn!==1)return false;
-  if(!Array.isArray(s.moveLog)||!s.moveLog.length||s.gameOver)return false;
+  if(!Array.isArray(s.moveLog)||(!allowEmptyLog&&!s.moveLog.length)||s.gameOver)return false;
   for(const e of s.moveLog)if(typeof e!=='string')return false;
   if(!Array.isArray(s.repList)||!Array.isArray(s.repMovers)||!Array.isArray(s.repChecks))return false;
   if(s.repList.length!==s.repMovers.length||s.repList.length!==s.repChecks.length)return false;
@@ -1771,8 +1771,13 @@ function loadAutosave(){
       const sel=document.getElementById('level');
       if(sel)sel.value=o.level;
     }
+    let us=[];
+    if(Array.isArray(o.undo)&&o.undo.length<=6){
+      us=o.undo.filter(x=>validSnap(x,true));
+      if(us.length!==o.undo.length)us=[];
+    }
     restore(o.snap);
-    undoStack=[];
+    undoStack=us;
     sel=null;
     legalC=null;
     thinking=false;

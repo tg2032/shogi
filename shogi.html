@@ -160,6 +160,7 @@ button[disabled]{opacity:.5;cursor:default}
           <button class="primary" id="btnNew">新規対局</button>
           <button id="btnHint" aria-keyshortcuts="h">ヒント</button>
           <button id="btnUndo">待った</button>
+          <button id="btnDeclare" title="入玉宣言（27点法）">入玉宣言</button>
           <button class="danger" id="btnResign">投了</button>
         </div>
         <div class="btns" style="margin-top:8px">
@@ -190,7 +191,7 @@ button[disabled]{opacity:.5;cursor:default}
         <div class="kifu" id="kifu" role="log" aria-label="棋譜"></div>
       </div>
       <div class="card hint">
-        まず駒（または持ち駒）をタップして選び、次に移動先のマスをタップします。相手はAIです。成り・不成はダイアログで選べます。「ヒント」ボタン（またはHキー）で次の一手の提案を表示します。難易度は5段階です。対局は自動保存され、開き直したときに続きから再開できます。
+        まず駒（または持ち駒）をタップして選び、次に移動先のマスをタップします。相手はAIです。成り・不成はダイアログで選べます。玉が敵陣に入り条件（敵陣に10枚以上・28点以上、27点法）を満たすと「入玉宣言」で勝てます。「ヒント」ボタン（またはHキー）で次の一手の提案を表示します。難易度は5段階です。対局は自動保存され、開き直したときに続きから再開できます。
       </div>
     </div>
   </div>
@@ -476,6 +477,22 @@ function isAttacked(idx,by){
     }
   }
   return false;
+}
+function declareInfo(side){
+  const lo=side===0?0:6,hi=lo+2;
+  let pts=0,inCamp=0,kingIn=false;
+  for(let i=0;i<81;i++){
+    const p=board[i];
+    if(!p||p.o!==side)continue;
+    const r=(i/9)|0;
+    if(r<lo||r>hi)continue;
+    if(p.t==='K'){kingIn=true;continue;}
+    inCamp++;
+    pts+=(p.t==='B'||p.t==='R')?5:1;
+  }
+  for(const t of HANDS)pts+=hands[side][t]*((t==='B'||t==='R')?5:1);
+  const need=side===0?28:27;
+  return {ok:kingIn&&inCamp>=10&&pts>=need&&!inCheck(side),pts:pts,need:need,inCamp:inCamp,kingIn:kingIn};
 }
 function inCheck(side){
   const k=kingIdx(side);
@@ -1065,6 +1082,11 @@ function render(){
     const uDis=!undoStack.length;
     if(bu.disabled!==uDis)bu.disabled=uDis;
   }
+  const bd=document.getElementById('btnDeclare');
+  if(bd){
+    const dDis=gameOver||thinking||turn!==0||!declareInfo(0).ok;
+    if(bd.disabled!==dDis)bd.disabled=dDis;
+  }
   const br=document.getElementById('btnResign');
   if(br){
     const rDis=!!gameOver;
@@ -1470,6 +1492,10 @@ function requestHint(){
   }
 }
 function scheduleAI(){
+  if(!gameOver&&turn===1&&declareInfo(1).ok){
+    endGame('lose','入玉宣言','相手が入玉宣言しました。あなたの負けです。');
+    return;
+  }
   cancelHint();
   thinking=true;
   render();
@@ -1866,6 +1892,12 @@ document.getElementById('btnUndo').onclick=()=>{
   render();
   saveGame();
   if(turn===1)scheduleAI();
+};
+document.getElementById('btnDeclare').onclick=()=>{
+  if(gameOver||thinking||turn!==0)return;
+  const d=declareInfo(0);
+  if(!d.ok)return;
+  endGame('win','入玉宣言','入玉宣言（'+d.pts+'点）が成立しました。あなたの勝ちです！');
 };
 document.getElementById('btnResign').onclick=()=>{
   if(gameOver)return;

@@ -97,7 +97,7 @@ button.danger{background:linear-gradient(180deg,#ff9d8f,#e86a58);border-color:#c
   height:170px;overflow-y:auto;font-size:13px;line-height:1.7;
   background:rgba(255,255,255,.06);border-radius:8px;padding:8px;
 }
-.card h2 .mini{float:right;min-height:28px;padding:2px 10px;font-size:12px;letter-spacing:0}
+.card h2 .mini{float:right;margin-left:6px;min-height:28px;padding:2px 10px;font-size:12px;letter-spacing:0}
 .kifu div{display:flex;gap:8px}
 .kifu .no{opacity:.5;min-width:22px;text-align:right}
 .kifu .mv{font-weight:700}
@@ -192,7 +192,7 @@ button[disabled]{opacity:.5;cursor:default}
         <div class="rec" id="record">0勝 0敗 0引分</div>
       </div>
       <div class="card">
-        <h2>棋譜 <button id="btnCopy" class="mini" aria-label="棋譜をコピー">コピー</button></h2>
+        <h2>棋譜 <button id="btnKif" class="mini" aria-label="KIF形式でコピー">KIF</button><button id="btnCopy" class="mini" aria-label="棋譜をコピー">コピー</button></h2>
         <div class="kifu" id="kifu" role="log" aria-label="棋譜"></div>
       </div>
       <div class="card hint">
@@ -258,7 +258,7 @@ const POOLW={beginner:500,easy:60,normal:0,hard:0,expert:0};
 function dirsOf(t,pr){return (pr&&PDEFS[t])?PDEFS[t]:DEFS[t];}
 function pval(p){return p.pr?PVAL[p.t]:VAL[p.t];}
 
-let board,hands,turn,undoStack,moveLog,lastMove,sel,legalC,gameOver,thinking,repCount,repList,repMovers,repChecks;
+let board,hands,turn,undoStack,moveLog,kifLog,lastMove,sel,legalC,gameOver,thinking,repCount,repList,repMovers,repChecks;
 
 const TI={P:0,L:1,N:2,S:3,G:4,B:5,R:6,K:7};
 let zSeed=0x9e3779b9>>>0;
@@ -341,6 +341,7 @@ function initState(){
   turn=0;
   undoStack=[];
   moveLog=[];
+  kifLog=[];
   lastMove=null;
   sel=null;
   legalC=null;
@@ -421,6 +422,7 @@ function snapshot(){
     hands:cloneHands(hands),
     turn:turn,
     moveLog:moveLog.slice(),
+    kifLog:kifLog.slice(),
     lastMove:lastMove,
     repList:repList.slice(),
     repMovers:repMovers.slice(),
@@ -434,6 +436,7 @@ function restore(s){
   hands=cloneHands(s.hands);
   turn=s.turn;
   moveLog=s.moveLog.slice();
+  kifLog=Array.isArray(s.kifLog)&&s.kifLog.length===s.moveLog.length?s.kifLog.slice():s.moveLog.map(()=>'');
   lastMove=s.lastMove;
   repList=s.repList.slice();
   repMovers=s.repMovers?s.repMovers.slice():[];
@@ -1204,12 +1207,14 @@ function tryTarget(i){
 function doPlayerMove(m){
   cancelHint();
   const txt=kifuOf(m);
+  const kl=kifLineOf(m);
   undoStack.push(snapshot());
   const mover=turn;
   const cap=!!board[m.t];
   applyMove(m);
   lastMove={f:m.f,t:m.t};
   moveLog.push(txt);
+  kifLog.push(kl);
   pushRep(mover,inCheck(turn));
   legalC=null;
   sfx(m.pr?'pro':(cap?'cap':'move'));
@@ -1274,6 +1279,16 @@ function kifuOf(m){
   return s;
 }
 
+function kifLineOf(m){
+  const prev=lastMove?lastMove.t:-1;
+  const dest=prev===m.t?'同　':sqName(m.t);
+  if(m.d)return dest+NAMES[m.d]+'打';
+  const p=board[m.f];
+  const name=p.t==='K'?'玉':dispName(p);
+  const canP=!p.pr&&p.t!=='G'&&p.t!=='K'&&((p.o===0&&(((m.f/9)|0)<=2||((m.t/9)|0)<=2))||(p.o===1&&(((m.f/9)|0)>=6||((m.t/9)|0)>=6)));
+  const from='('+(9-(m.f%9))+(((m.f/9)|0)+1)+')';
+  return dest+name+(m.pr?'成':(canP?'不成':''))+from;
+}
 function afterMove(){
   sel=null;
   const mv=genLegal('all');
@@ -1358,12 +1373,14 @@ function applyAI(m,token,score){
   if(resignCheck(score))return;
   if(!m){afterMove();return;}
   const txt=kifuOf(m);
+  const kl=kifLineOf(m);
   undoStack.push(snapshot());
   const mover=turn;
   const cap=!!board[m.t];
   applyMove(m);
   lastMove={f:m.f,t:m.t};
   moveLog.push(txt);
+  kifLog.push(kl);
   pushRep(mover,inCheck(turn));
   legalC=null;
   sfx(m.pr?'pro':(cap?'cap':'move'));
@@ -1768,6 +1785,10 @@ function validSnap(s,allowEmptyLog){
   if(s.turn!==0&&s.turn!==1)return false;
   if(!Array.isArray(s.moveLog)||(!allowEmptyLog&&!s.moveLog.length)||s.gameOver)return false;
   for(const e of s.moveLog)if(typeof e!=='string')return false;
+  if(s.kifLog!=null){
+    if(!Array.isArray(s.kifLog)||s.kifLog.length!==s.moveLog.length)return false;
+    for(const e of s.kifLog)if(typeof e!=='string'||e.length>16)return false;
+  }
   if(!Array.isArray(s.repList)||!Array.isArray(s.repMovers)||!Array.isArray(s.repChecks))return false;
   if(s.repList.length!==s.repMovers.length||s.repList.length!==s.repChecks.length)return false;
   if(!s.repCount||typeof s.repCount!=='object'||Array.isArray(s.repCount))return false;
@@ -1896,12 +1917,18 @@ if(typeof window!=='undefined'&&window.addEventListener){
 
 document.getElementById('btnNew').onclick=()=>{lsDel(SAVE_KEY);resetGame();};
 document.getElementById('btnAgain').onclick=()=>{lsDel(SAVE_KEY);resetGame();};
+function kifText(){
+  if(!moveLog.length||kifLog.some(x=>!x))return '';
+  const pad=n=>(' '.repeat(Math.max(0,4-String(n).length)))+n;
+  const lines=['手合割：平手','先手：あなた','後手：AI（'+readLevel()+'）','手数----指手---------消費時間--'];
+  kifLog.forEach((k,i)=>lines.push(pad(i+1)+' '+k));
+  return lines.join('\n')+'\n';
+}
 function kifuText(){
   return moveLog.map((t,i)=>(i+1)+' '+(i%2===0?'▲':'△')+t).join('\n');
 }
-document.getElementById('btnCopy').onclick=async()=>{
-  const b=document.getElementById('btnCopy');
-  const text=kifuText();
+async function copyText(btnId,text,idle,none){
+  const b=document.getElementById(btnId);
   let ok=false;
   if(text){
     try{await navigator.clipboard.writeText(text);ok=true;}
@@ -1913,9 +1940,11 @@ document.getElementById('btnCopy').onclick=async()=>{
       }catch(y){ok=false;}
     }
   }
-  b.textContent=!text?'棋譜なし':(ok?'コピーしました':'コピー失敗');
-  setTimeout(()=>{b.textContent='コピー';},1500);
-};
+  b.textContent=!text?none:(ok?'コピーしました':'コピー失敗');
+  setTimeout(()=>{b.textContent=idle;},1500);
+}
+document.getElementById('btnCopy').onclick=()=>copyText('btnCopy',kifuText(),'コピー','棋譜なし');
+document.getElementById('btnKif').onclick=()=>copyText('btnKif',kifText(),'KIF','KIF不可');
 document.getElementById('btnHint').onclick=()=>{requestHint();};
 document.getElementById('btnUndo').onclick=()=>{
   closePromo();

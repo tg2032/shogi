@@ -176,6 +176,10 @@ button[disabled]{opacity:.5;cursor:default}
             <option value="hard">つよい</option>
             <option value="expert">とくにつよい</option>
           </select>
+          <select id="side" aria-label="手番（次の対局から）" title="次の対局から有効">
+            <option value="0" selected>先手（あなた）</option>
+            <option value="1">後手（あなた）</option>
+          </select>
           <button id="btnSound" aria-pressed="true" aria-label="効果音">🔊</button>
         </div>
         <div id="hintOut" class="hintOut" role="status" aria-live="polite"></div>
@@ -991,6 +995,8 @@ function chooseAIMove(level,cap){
 const cells=[];
 const boardEl=document.getElementById('board');
 let focusIdx=40;
+let me=0,ai=1;
+function bi(k){return me===1?80-k:k;}
 for(let r=0;r<9;r++){
   const row=document.createElement('div');
   row.className='brow';
@@ -1015,8 +1021,16 @@ for(let r=0;r<9;r++){
 }
 cells[focusIdx].d.tabIndex=0;
 
-function resetGame(){
+function readSide(){
+  const e=document.getElementById('side');
+  return e&&e.value==='1'?1:0;
+}
+function startIfAI(){
+  if(!gameOver&&!thinking&&turn===ai)scheduleAI();
+}
+function resetGame(noStart){
   initState();
+  me=readSide();ai=me^1;
   cancelHint();
   recordCounted=null;
   resignStreak=0;
@@ -1025,6 +1039,7 @@ function resetGame(){
   render();
   closePromo();
   closeModal('overModal');
+  if(noStart!==true)startIfAI();
 }
 
 function dispName(p){
@@ -1039,7 +1054,7 @@ function sqName(i){
 }
 function render(){
   const targets=new Set();
-  if(sel&&turn===0&&!gameOver){
+  if(sel&&turn===me&&!gameOver){
     for(const m of legalMoves()){
       if(sel.type==='board'&&m.f===sel.i){targets.add(m.t);}
       if(sel.type==='hand'&&m.d===sel.p){targets.add(m.t);}
@@ -1047,13 +1062,14 @@ function render(){
   }
   const chk=gameOver?false:inCheck(turn);
   const chkK=chk?kingIdx(turn):-1;
-  for(let i=0;i<81;i++){
-    const {d,pc}=cells[i];
+  for(let k=0;k<81;k++){
+    const i=bi(k);
+    const {d,pc}=cells[k];
     const p=board[i];
     if(p){
       const n=dispName(p);
       pc.textContent=n;
-      pc.className='piece'+(p.o===1?' inv':'')+(n.length>1?' long':'');
+      pc.className='piece'+(p.o!==me?' inv':'')+(n.length>1?' long':'');
     }else{
       pc.textContent='';
       pc.className='piece hide';
@@ -1066,24 +1082,28 @@ function render(){
       if(p)cls+=' cap';
     }
     if(i===chkK)cls+=' chkking';
-    if(hintMove&&turn===0&&!gameOver){
+    if(hintMove&&turn===me&&!gameOver){
       if(hintMove.f===i)cls+=' hintA';
       if(hintMove.t===i)cls+=' hintB';
     }
     d.className=cls;
-    d.tabIndex=(i===focusIdx?0:-1);
-    d.setAttribute('aria-label',sqName(i)+' '+(p?(p.o===1?'相手の':'')+dispName(p):'空き'));
+    d.tabIndex=(k===focusIdx?0:-1);
+    const cf=d.querySelector('.coord.f');
+    if(cf){const t=String(me===0?9-(k%9):(k%9)+1);if(cf.textContent!==t)cf.textContent=t;}
+    const cr=d.querySelector('.coord.r');
+    if(cr){const t=KANJI[me===0?((k/9)|0):8-((k/9)|0)];if(cr.textContent!==t)cr.textContent=t;}
+    d.setAttribute('aria-label',sqName(i)+' '+(p?(p.o!==me?'相手の':'')+dispName(p):'空き'));
     if(sel&&sel.type==='board'&&sel.i===i)d.setAttribute('aria-selected','true');
     else d.removeAttribute('aria-selected');
   }
-  renderHand(1);
-  renderHand(0);
+  renderHand(ai);
+  renderHand(me);
   const st=document.getElementById('status');
-  const nextCls='status'+(turn===0&&!gameOver&&!thinking?' turn0':'')+(chk&&!gameOver?' chk':'');
+  const nextCls='status'+(turn===me&&!gameOver&&!thinking?' turn0':'')+(chk&&!gameOver?' chk':'');
   let nextText;
   if(gameOver)nextText='対局終了';
   else if(thinking)nextText='AIが思考中…';
-  else nextText=turn===0?(chk?'あなたの番・王手！':'あなたの番（先手）'):(chk?'AIの番・王手':'AIの番（後手）');
+  else nextText=turn===me?(chk?'あなたの番・王手！':'あなたの番（'+(me===0?'先手':'後手')+'）'):(chk?'AIの番・王手':'AIの番（'+(ai===0?'先手':'後手')+'）');
   if(st.className!==nextCls)st.className=nextCls;
   if(st.textContent!==nextText)st.textContent=nextText;
   renderArrow();
@@ -1091,19 +1111,19 @@ function render(){
   renderKifu();
   const hb=document.getElementById('btnHint');
   if(hb){
-    const dis=gameOver||thinking||turn!==0||hintBusy;
+    const dis=gameOver||thinking||turn!==me||hintBusy;
     if(hb.disabled!==dis)hb.disabled=dis;
     const ht=hintBusy?'ヒント取得中…':'ヒント';
     if(hb.textContent!==ht)hb.textContent=ht;
   }
   const bu=document.getElementById('btnUndo');
   if(bu){
-    const uDis=!undoStack.length;
+    const uDis=!undoStack.length||(me===1&&moveLog.length<=1&&!gameOver);
     if(bu.disabled!==uDis)bu.disabled=uDis;
   }
   const bd=document.getElementById('btnDeclare');
   if(bd){
-    const dDis=gameOver||thinking||turn!==0||!declareInfo(0).ok;
+    const dDis=gameOver||thinking||turn!==me||!declareInfo(me).ok;
     if(bd.disabled!==dDis)bd.disabled=dDis;
   }
   const br=document.getElementById('btnResign');
@@ -1116,7 +1136,7 @@ function renderArrow(){
   const svg=document.getElementById('arrow');
   if(!svg)return;
   if(!lastMove||lastMove.f<0){if(svg.innerHTML)svg.innerHTML='';return;}
-  const cx=i=>((i%9)+0.5)*100/9, cy=i=>(((i/9)|0)+0.5)*100/9;
+  const cx=i=>((bi(i)%9)+0.5)*100/9, cy=i=>(((bi(i)/9)|0)+0.5)*100/9;
   const x1=cx(lastMove.f),y1=cy(lastMove.f),x2=cx(lastMove.t),y2=cy(lastMove.t);
   const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy)||1;
   const ux=dx/len,uy=dy/len,head=5.4;
@@ -1132,7 +1152,7 @@ function renderEval(){
   const lab=document.getElementById('evLabel');
   if(!bar||!lab)return;
   let e=0;
-  try{const base=evalPos();e=(turn===0?base-12:-(base-12));}catch(x){e=0;}
+  try{const base=evalPos();e=(turn===me?base-12:-(base-12));}catch(x){e=0;}
   const share=0.5+Math.max(-0.5,Math.min(0.5,e/1600));
   bar.style.width=(share*100).toFixed(1)+'%';
   const v=Math.round(e/10)*10;
@@ -1166,17 +1186,18 @@ function renderKifu(){
   }
 }
 function renderHand(side){
-  const el=document.getElementById('hand'+side);
+  const mine=side===me;
+  const el=document.getElementById('hand'+(mine?0:1));
   const act=document.activeElement;
   const keep=(act&&act.classList&&act.classList.contains('handItem')&&act.parentNode===el)?act.dataset.h:null;
-  let html='<span class="lbl">'+(side===0?'あなたの持ち駒':'相手の持ち駒')+'</span>';
+  let html='<span class="lbl">'+(mine?'あなたの持ち駒':'相手の持ち駒')+'</span>';
   for(const t of HANDS){
     const n=hands[side][t];
     if(n<=0)continue;
-    const isSel=sel&&sel.type==='hand'&&sel.p===t&&side===0;
-    html+='<div class="handItem'+(isSel?' sel':'')+'" data-h="'+t+'" role="button" tabindex="'+(side===0?0:-1)+
-      '" aria-label="'+(side===0?'あなたの':'相手の')+'持ち駒 '+NAMES[t]+' '+n+'枚'+
-      (isSel?'（選択中）':'')+'"'+(side===0?'':' aria-disabled="true"')+
+    const isSel=sel&&sel.type==='hand'&&sel.p===t&&mine;
+    html+='<div class="handItem'+(isSel?' sel':'')+'" data-h="'+t+'" role="button" tabindex="'+(mine?0:-1)+
+      '" aria-label="'+(mine?'あなたの':'相手の')+'持ち駒 '+NAMES[t]+' '+n+'枚'+
+      (isSel?'（選択中）':'')+'"'+(mine?'':' aria-disabled="true"')+
       '><span class="n">'+NAMES[t]+'</span><span class="cnt">×'+n+'</span></div>';
   }
   el.innerHTML=html;
@@ -1188,7 +1209,7 @@ function renderHand(side){
 
 function selectBoard(i){
   const p=board[i];
-  if(!p||p.o!==0){sel=null;render();return;}
+  if(!p||p.o!==me){sel=null;render();return;}
   sel={type:'board',i:i};
   render();
 }
@@ -1297,14 +1318,14 @@ function afterMove(){
   const key=posKey();
   if((repCount[key]||0)>=4){
     const loser=continuousCheckLoser(key);
-    if(loser===0)endGame('lose','連続王手の千日手','あなたの連続王手による反則負けです。');
-    else if(loser===1)endGame('win','連続王手の千日手','相手の連続王手によるあなたの勝ちです！');
+    if(loser===me)endGame('lose','連続王手の千日手','あなたの連続王手による反則負けです。');
+    else if(loser===ai)endGame('win','連続王手の千日手','相手の連続王手によるあなたの勝ちです！');
     else endGame('draw','千日手','同じ局面が4回現れました。引き分けです。');
     return;
   }
   if(!mv.length){
     const chk=inCheck(turn);
-    if(turn===0)endGame('lose',chk?'チェックメイト':'勝ちなし','あなたの負けです。');
+    if(turn===me)endGame('lose',chk?'チェックメイト':'勝ちなし','あなたの負けです。');
     else endGame('win',chk?'チェックメイト':'勝ち','あなたの勝ちです！');
     return;
   }
@@ -1313,7 +1334,7 @@ function afterMove(){
     return;
   }
   if(!gameOver&&inCheck(turn))sfx('chk');
-  if(turn===1)scheduleAI();
+  if(turn===ai)scheduleAI();
   saveGame();
 }
 
@@ -1464,7 +1485,7 @@ function hintFail(){
   render();
 }
 function requestHint(){
-  if(gameOver||thinking||turn!==0||hintBusy)return;
+  if(gameOver||thinking||turn!==me||hintBusy)return;
   hintToken++;
   const token=hintToken;
   hintBusy=true;
@@ -1479,7 +1500,7 @@ function requestHint(){
     hintBusy=false;
     if(hintTimer){clearTimeout(hintTimer);hintTimer=null;}
     hintTimer=null;
-    if(gameOver||turn!==0||thinking){hintText('');render();return;}
+    if(gameOver||turn!==me||thinking){hintText('');render();return;}
     if(!m){hintFail();return;}
     hintMove=m;
     let tail='';
@@ -1529,7 +1550,7 @@ function requestHint(){
   }
 }
 function scheduleAI(){
-  if(!gameOver&&turn===1&&declareInfo(1).ok){
+  if(!gameOver&&turn===ai&&declareInfo(ai).ok){
     endGame('lose','入玉宣言','相手が入玉宣言しました。あなたの負けです。');
     return;
   }
@@ -1540,7 +1561,7 @@ function scheduleAI(){
   const level=readLevel();
   const bail=()=>{
     if(token!==aiToken)return true;
-    if(gameOver||turn!==1){
+    if(gameOver||turn!==ai){
       thinking=false;
       render();
       return true;
@@ -1675,20 +1696,20 @@ document.addEventListener('keydown',e=>{
 });
 
 function activateSquare(i){
-  if(gameOver||thinking||turn!==0)return;
-  focusIdx=i;
+  if(gameOver||thinking||turn!==me)return;
+  focusIdx=bi(i);
   if(sel){
     if(tryTarget(i))return;
     const p=board[i];
-    if(p&&p.o===0)selectBoard(i);
+    if(p&&p.o===me)selectBoard(i);
     else{sel=null;render();}
     return;
   }
   const p=board[i];
-  if(p&&p.o===0)selectBoard(i);
+  if(p&&p.o===me)selectBoard(i);
 }
 function activateHand(h){
-  if(gameOver||thinking||turn!==0)return;
+  if(gameOver||thinking||turn!==me)return;
   const t=h.dataset.h;
   if(sel&&sel.type==='hand'&&sel.p===t){sel=null;render();return;}
   sel={type:'hand',p:t};
@@ -1697,7 +1718,7 @@ function activateHand(h){
 boardEl.addEventListener('click',e=>{
   const sq=e.target.closest('.sq');
   if(!sq)return;
-  activateSquare(+sq.dataset.i);
+  activateSquare(bi(+sq.dataset.i));
 });
 boardEl.addEventListener('contextmenu',e=>e.preventDefault());
 boardEl.addEventListener('keydown',e=>{
@@ -1717,7 +1738,7 @@ boardEl.addEventListener('keydown',e=>{
     case 'End':ni=r*9+8;break;
     case 'Enter':case ' ':case 'Spacebar':
       e.preventDefault();
-      activateSquare(i);
+      activateSquare(bi(i));
       return;
     case 'Escape':
       if(sel){sel=null;render();}
@@ -1759,7 +1780,7 @@ const SAVE_KEY='shogi_autosave';
 function saveGame(){
   try{
     if(gameOver||!moveLog.length){lsDel(SAVE_KEY);return;}
-    lsSet(SAVE_KEY,JSON.stringify({v:1,level:readLevel(),snap:snapshot(),undo:undoStack.slice(-6)}));
+    lsSet(SAVE_KEY,JSON.stringify({v:1,level:readLevel(),snap:snapshot(),undo:undoStack.slice(-6),me:me}));
   }catch(x){}
 }
 function validSnap(s,allowEmptyLog){
@@ -1812,6 +1833,9 @@ function loadAutosave(){
       const sel=document.getElementById('level');
       if(sel)sel.value=o.level;
     }
+    me=o.me===1?1:0;ai=me^1;
+    const ss=document.getElementById('side');if(ss)ss.value=String(me);
+    aiToken++;killWorker();cancelHint();
     let us=[];
     if(Array.isArray(o.undo)&&o.undo.length<=6){
       us=o.undo.filter(x=>validSnap(x,true));
@@ -1823,7 +1847,7 @@ function loadAutosave(){
     legalC=null;
     thinking=false;
     render();
-    if(turn===1&&!gameOver)scheduleAI();
+    startIfAI();
     return true;
   }catch(x){try{resetGame();}catch(y){}return false;}
 }
@@ -1917,10 +1941,17 @@ if(typeof window!=='undefined'&&window.addEventListener){
 
 document.getElementById('btnNew').onclick=()=>{lsDel(SAVE_KEY);resetGame();};
 document.getElementById('btnAgain').onclick=()=>{lsDel(SAVE_KEY);resetGame();};
+(function(){
+  const e=document.getElementById('side');
+  if(!e)return;
+  const v=lsGet('shogi_side');
+  if(v==='0'||v==='1')e.value=v;
+  e.addEventListener('change',()=>lsSet('shogi_side',e.value));
+})();
 function kifText(){
   if(!moveLog.length||kifLog.some(x=>!x))return '';
   const pad=n=>(' '.repeat(Math.max(0,4-String(n).length)))+n;
-  const lines=['手合割：平手','先手：あなた','後手：AI（'+readLevel()+'）','手数----指手---------消費時間--'];
+  const lines=['手合割：平手','先手：'+(me===0?'あなた':'AI（'+readLevel()+'）'),'後手：'+(me===1?'あなた':'AI（'+readLevel()+'）'),'手数----指手---------消費時間--'];
   kifLog.forEach((k,i)=>lines.push(pad(i+1)+' '+k));
   return lines.join('\n')+'\n';
 }
@@ -1951,25 +1982,25 @@ document.getElementById('btnUndo').onclick=()=>{
   if(thinking)aiToken++;
   thinking=false;
   killWorker();
-  if(!undoStack.length)return;
+  if(!undoStack.length||(me===1&&moveLog.length<=1&&!gameOver))return;
   const wasOver=gameOver;
   cancelHint();
   let guard=0;
   do{
     restore(undoStack.pop());
     guard++;
-  }while(turn!==0&&undoStack.length&&guard<6);
+  }while(turn!==me&&undoStack.length&&guard<6);
   gameOver=false;
   resignStreak=0;
   if(wasOver)undoRecordCounted();
   closeModal('overModal');
   render();
   saveGame();
-  if(turn===1)scheduleAI();
+  startIfAI();
 };
 document.getElementById('btnDeclare').onclick=()=>{
-  if(gameOver||thinking||turn!==0)return;
-  const d=declareInfo(0);
+  if(gameOver||thinking||turn!==me)return;
+  const d=declareInfo(me);
   if(!d.ok)return;
   endGame('win','入玉宣言','入玉宣言（'+d.pts+'点）が成立しました。あなたの勝ちです！');
 };
@@ -1978,8 +2009,8 @@ document.getElementById('btnResign').onclick=()=>{
   endGame('lose','投了','あなたの負けです。');
 };
 
-resetGame();
-loadAutosave();
+resetGame(true);
+if(!loadAutosave())startIfAI();
 </script>
 </body>
 </html>

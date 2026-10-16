@@ -1281,6 +1281,10 @@ function afterMove(){
     else endGame('win',chk?'チェックメイト':'勝ち','あなたの勝ちです！');
     return;
   }
+  if(moveLog.length>=256&&!declareInfo(turn).ok){
+    endGame('draw','持将棋','256手に達したため、引き分けです。');
+    return;
+  }
   if(!gameOver&&inCheck(turn))sfx('chk');
   if(turn===1)scheduleAI();
   saveGame();

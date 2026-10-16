@@ -837,14 +837,20 @@ function search(depth,alpha,beta,qd,ply){
   }
   const hbase=me*81*81;
   let bmove=null;
+  let mi=0;
   for(const m of moves){
     const info=applyMove(m);
     let s;
     try{
-      s=-search(depth-1,-beta,-alpha,depth>0?qd:qd-1,ply+1);
+      const qd2=depth>0?qd:qd-1;
+      let red=0;
+      if(mi>=4&&depth>=3&&!chk&&mode==='all'&&!info.cap&&!m.pr&&!m.d)red=1;
+      s=-search(depth-1-red,-beta,-alpha,qd2,ply+1);
+      if(red&&s>alpha)s=-search(depth-1,-beta,-alpha,qd2,ply+1);
     }finally{
       revertMove(m,info);
     }
+    mi++;
     if(aborted)throw 0;
     if(s>best){best=s;bmove=m;}
     if(s>alpha)alpha=s;

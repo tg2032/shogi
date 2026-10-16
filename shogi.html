@@ -137,6 +137,7 @@ button[disabled]{opacity:.5;cursor:default}
   .panel{width:min(94vw,520px)}
   .kifu{height:110px}
   .hand{min-height:48px}
+  .hand .lbl{writing-mode:horizontal-tb}
 }
 </style>
 </head>
@@ -726,6 +727,9 @@ function evalPos(){
     }
   }
   const stm=turn===0?s:-s;
+  if(turn===0?(kingIdx(0)>=0&&((kingIdx(0)/9)|0)<=2):(kingIdx(1)>=0&&((kingIdx(1)/9)|0)>=6)){
+    if(declareInfo(turn).ok)return 6000;
+  }
   return stm+12;
 }
 

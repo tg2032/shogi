@@ -108,15 +108,28 @@ test('declaration (27-point rule): points, camp count and check', () => {
   eq(r, { a: false, b: false, c: true, pts: 30, d: false });
 });
 
-test('every difficulty level plays only legal moves (self-play)', () => {
+test('every difficulty level (incl. the new beginner levels) plays only legal moves (self-play)', () => {
   eq(run(`(function(){
     initState();let bad=0;
-    for(let p=0;p<80;p++){const mv=genLegal('all');if(!mv.length)break;
-      const m=chooseAIMove(LEVELS[p%5],120);
+    for(let p=0;p<84;p++){const mv=genLegal('all');if(!mv.length)break;
+      const m=chooseAIMove(LEVELS[p%LEVELS.length],120);
       if(!m||!mv.some(x=>x.f===m.f&&x.t===m.t&&(x.d||0)===(m.d||0)&&!!x.pr===!!m.pr)){bad++;break;}
       const mo=turn;applyMove(m);pushRep(mo,inCheck(turn));
       if(kingIdx(0)<0||kingIdx(1)<0){bad++;break;}}
     return bad;})()`), 0);
+});
+
+test('difficulty ladder: weaker levels use a wider blunder pool and less capture reading', () => {
+  eq(run(`(function(){
+    const order=['novice','starter','beginner','easy','normal'];
+    let ok=true;
+    for(let i=1;i<order.length;i++){
+      const a=order[i-1],b=order[i];
+      if(!((POOLW[a]||0)>=(POOLW[b]||0)))ok=false;
+      if(!(QDL[a]<=QDL[b]))ok=false;
+      if(!((RANDP[a]||0)>=(RANDP[b]||0)))ok=false;
+    }
+    return {ok,levels:LEVELS};})()`), { ok: true, levels: ['novice', 'starter', 'beginner', 'easy', 'normal', 'hard', 'expert'] });
 });
 
 console.log(failed ? '\n' + failed + ' test(s) failed' : '\nall tests passed');

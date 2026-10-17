@@ -170,6 +170,8 @@ button[disabled]{opacity:.5;cursor:default}
         </div>
         <div class="btns" style="margin-top:8px">
           <select id="level" aria-label="AIの強さ">
+            <option value="novice">はじめの一歩</option>
+            <option value="starter">入門</option>
             <option value="beginner">はじめて</option>
             <option value="easy">やさしい</option>
             <option value="normal" selected>ふつう</option>
@@ -253,11 +255,12 @@ const PVAL={P:540,L:540,N:540,S:560,G:620,B:1180,R:1400,K:0};
 const HANDS=['P','L','N','S','G','B','R'];
 const MATE=1000000;
 const QD=3;
-const LEVELS=['beginner','easy','normal','hard','expert'];
-const BUDGET={beginner:250,easy:400,normal:900,hard:2600,expert:5200};
-const MAXDEPTH={beginner:1,easy:1,normal:4,hard:6,expert:8};
-const QDL={beginner:1,easy:2,normal:3,hard:3,expert:3};
-const POOLW={beginner:500,easy:60,normal:0,hard:0,expert:0};
+const LEVELS=['novice','starter','beginner','easy','normal','hard','expert'];
+const BUDGET={novice:150,starter:200,beginner:250,easy:400,normal:900,hard:2600,expert:5200};
+const MAXDEPTH={novice:1,starter:1,beginner:1,easy:1,normal:4,hard:6,expert:8};
+const QDL={novice:0,starter:0,beginner:1,easy:2,normal:3,hard:3,expert:3};
+const POOLW={novice:2500,starter:900,beginner:700,easy:60,normal:0,hard:0,expert:0};
+const RANDP={novice:0.35,starter:0.1,beginner:0.08};
 
 function dirsOf(t,pr){return (pr&&PDEFS[t])?PDEFS[t]:DEFS[t];}
 function pval(p){return p.pr?PVAL[p.t]:VAL[p.t];}
@@ -906,11 +909,13 @@ function chooseAIMove(level,cap){
   const maxDepth=MAXDEPTH[level]||MAXDEPTH.normal;
   let budget=BUDGET[level]||BUDGET.normal;
   if(cap&&budget>cap)budget=cap;
-  const qd=QDL[level]||QD;
+  const qd=QDL[level]!==undefined?QDL[level]:QD;
   nodes=0;aborted=false;
   const start=performance.now();
   deadline=start+budget;
-  if(level==='beginner'||level==='easy'){
+  if(maxDepth===1){
+    const rp=RANDP[level]||0;
+    if(rp>0&&Math.random()<rp){rootScore=null;return roots[(Math.random()*roots.length)|0];}
     const scored=[];
     orderMoves(roots);
     try{

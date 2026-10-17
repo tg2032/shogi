@@ -45,6 +45,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     eq($('errbar').classList.contains('on'), false);
   });
 
+  await test('level selector offers every engine level, easiest first', async ({ $, ev }) => {
+    eq([...$('level').options].map((o) => o.value), ev('LEVELS'));
+    eq($('level').options[0].textContent, 'はじめの一歩');
+  });
+
   await test('gote: board is rotated (coordinates and king position)', async ({ $, ev, w, setup }) => {
     setup(1);
     ev('initState();me=1;ai=0;render();');

@@ -132,6 +132,51 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     eq($('record').textContent, '0勝 1敗 0引分');
   });
 
+  // Synthetic repetition: position key K occurs 4 times; `checker` gave check on every move in the last cycle.
+  const repScenario = (side, checker) => `(function(){
+    const k=posKey();
+    repList=[k,'x',k,'x',k,'x',k];
+    repMovers=[-1,${checker},${checker ^ 1},${checker},${checker ^ 1},${checker},${checker ^ 1}];
+    repChecks=[false,true,false,true,false,true,false];
+    repCount={};repCount[k]=4;
+    afterMove();})()`;
+
+  await test('perpetual check loses: sente player is the checker (loss), gote AI is the checker (win)', async ({ ev, setup, fin, over }) => {
+    setup(0);
+    ev(`board[4]={t:'K',o:1,pr:false};board[76]={t:'K',o:0,pr:false};turn=0;moveLog=['a','b'];kifLog=['',''];`);
+    fin();
+    ev(repScenario(0, 0));
+    eq(over()[0], '連続王手の千日手');
+    eq(over()[1], 'あなたの連続王手による反則負けです。');
+    setup(0);
+    ev(`board[4]={t:'K',o:1,pr:false};board[76]={t:'K',o:0,pr:false};turn=0;moveLog=['a','b'];kifLog=['',''];`);
+    fin();
+    ev(repScenario(0, 1));
+    eq(over()[1], '相手の連続王手によるあなたの勝ちです！');
+  });
+
+  await test('perpetual check with the player as gote is judged for the right side', async ({ ev, setup, fin, over }) => {
+    setup(1);
+    ev(`board[4]={t:'K',o:1,pr:false};board[76]={t:'K',o:0,pr:false};turn=1;moveLog=['a','b'];kifLog=['',''];`);
+    fin();
+    ev(repScenario(1, 1));
+    eq(over()[1], 'あなたの連続王手による反則負けです。');
+    setup(1);
+    ev(`board[4]={t:'K',o:1,pr:false};board[76]={t:'K',o:0,pr:false};turn=1;moveLog=['a','b'];kifLog=['',''];`);
+    fin();
+    ev(repScenario(1, 0));
+    eq(over()[1], '相手の連続王手によるあなたの勝ちです！');
+  });
+
+  await test('plain fourfold repetition without perpetual check is a draw', async ({ ev, setup, fin, over }) => {
+    setup(0);
+    ev(`board[4]={t:'K',o:1,pr:false};board[76]={t:'K',o:0,pr:false};turn=0;moveLog=['a','b'];kifLog=['',''];`);
+    fin();
+    ev(`(function(){const k=posKey();repList=[k,'x',k,'x',k,'x',k];repMovers=[-1,0,1,0,1,0,1];
+      repChecks=[false,false,false,false,false,false,false];repCount={};repCount[k]=4;afterMove();})()`);
+    eq(over(), ['千日手', '同じ局面が4回現れました。引き分けです。']);
+  });
+
   await test('jishogi: draw at 256 moves; resign loses', async ({ $, ev, setup, fin, over }) => {
     setup(1);
     ev(`board[0]={t:'K',o:1,pr:false};board[80]={t:'K',o:0,pr:false};board[40]={t:'G',o:0,pr:false};

@@ -1391,8 +1391,14 @@ function snapPosition(){
     repChecks:repChecks.slice()
   };
 }
-function applyAI(m,token,score){
+let aiT0=0;
+const AI_MIN_MS=450;
+function applyAI(m,token,score,late){
   if(token!==aiToken)return;
+  if(!late){
+    const wait=AI_MIN_MS-(performance.now()-aiT0);
+    if(wait>0){setTimeout(()=>applyAI(m,token,score,true),wait);return;}
+  }
   cancelHint();
   thinking=false;
   if(gameOver)return;
@@ -1555,6 +1561,7 @@ function requestHint(){
   }
 }
 function scheduleAI(){
+  aiT0=performance.now();
   if(!gameOver&&turn===ai&&declareInfo(ai).ok){
     endGame('lose','入玉宣言','相手が入玉宣言しました。あなたの負けです。');
     return;

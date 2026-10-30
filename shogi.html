@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>将棋</title>
+<meta name="description" content="ブラウザで遊べる将棋。AIと対戦（7段階の難易度）、ヒント、待った、棋譜のコピー、入玉宣言に対応。">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
@@ -152,7 +153,7 @@ button[disabled]{opacity:.5;cursor:default}
     <div class="status" id="status" role="status" aria-live="polite">読み込み中…</div>
   </div>
   <div class="errbar" id="errbar" role="alert" tabindex="0" title="クリックで閉じる"></div>
-  <div class="main">
+  <main class="main">
     <div class="boardArea">
       <div class="hand top" id="hand1" role="group" aria-label="相手の持ち駒"><span class="lbl">相手の駒</span></div>
       <div class="board" id="board" role="grid" aria-label="将棋盤（縦9段、横9路）" aria-rowcount="9" aria-colcount="9"><svg class="arrow" id="arrow" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false"></svg></div>
@@ -205,7 +206,7 @@ button[disabled]{opacity:.5;cursor:default}
         まず駒（または持ち駒）をタップして選び、次に移動先のマスをタップします。相手はAIです。成り・不成はダイアログで選べます。玉が敵陣に入り条件（敵陣に10枚以上・28点以上、27点法）を満たすと「入玉宣言」で勝てます。「ヒント」ボタン（またはHキー）で次の一手の提案を表示します。難易度は5段階です。対局は自動保存され、開き直したときに続きから再開できます。
       </div>
     </div>
-  </div>
+  </main>
 </div>
 
 <div class="modal" id="promoModal" role="dialog" aria-modal="true" aria-labelledby="promoTitle">

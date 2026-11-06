@@ -142,6 +142,7 @@ button[disabled]{opacity:.5;cursor:default}
 .dialog .sub{font-size:14px;opacity:.85;margin-bottom:16px;line-height:1.7}
 .dialog .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
 .dialog .row button{min-width:110px;min-height:48px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 @media (max-width:760px){
   .main{flex-direction:column;align-items:center}
   .panel{width:min(94vw,520px)}

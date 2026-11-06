@@ -23,10 +23,12 @@
 
 ```bash
 node test/engine.test.js                  # 依存なし
+node test/invariants.test.js              # ランダム対局での不変条件（約30秒）
 npm i --no-save jsdom && node test/ui.test.js   # UI（jsdom）
 ```
 
 - `engine.test.js`: perft、ハッシュの整合、打ち歩詰め・二歩、強制成り、詰みの発見、入玉宣言、全難易度の自己対局
+- `invariants.test.js`: 駒の総数・玉・二歩・行き所のない駒・ハッシュ・違法手を、ランダム／全レベルの対局で毎手検証
 - `ui.test.js`: 先手・後手それぞれの詰み・入玉宣言・投了・持将棋、AIの宣言、自動保存と再開、棋譜の安全な描画、KIF 出力
 
 CI（GitHub Actions）で push のたびに両方を実行します。

@@ -13,6 +13,8 @@ jobs:
           node-version: 20
       - name: Engine tests
         run: node test/engine.test.js
+      - name: Invariant stress test
+        run: node test/invariants.test.js
       - name: UI tests (jsdom)
         run: |
           npm i --no-save --no-package-lock jsdom

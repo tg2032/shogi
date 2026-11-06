@@ -32,3 +32,7 @@ npm i --no-save jsdom && node test/ui.test.js   # UI（jsdom）
 - `ui.test.js`: 先手・後手それぞれの詰み・入玉宣言・投了・持将棋、AIの宣言、自動保存と再開、棋譜の安全な描画、KIF 出力
 
 CI（GitHub Actions）で push のたびに両方を実行します。
+
+## License
+
+MIT License（[LICENSE](LICENSE) 参照）

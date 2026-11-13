@@ -230,6 +230,40 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     eq(lines[4], '   1 ７六歩(77)', kif);
   });
 
+  await test('coach mode off: no automatic recommendation and no evaluation text', async ({ $, ev }) => {
+    ev('resetGame(true);');
+    ev('coachKick();');
+    await wait(300);
+    eq($('hintOut').textContent, '');
+    eq($('coachOut').textContent, '');
+    eq(ev('hintBusy'), false);
+  });
+
+  await test('coach mode: recommends a move on your turn and praises playing it', async ({ $, ev }) => {
+    $('coach').checked = true;
+    ev('resetGame(true);coachKick();');
+    await wait(2600);
+    eq($('hintOut').textContent.startsWith('指南: おすすめは '), true, $('hintOut').textContent);
+    ev(`(function(){const h=hintMove;doPlayerMove(legalMoves().find(x=>x.f===h.f&&x.t===h.t&&!!x.pr===!!h.pr&&(x.d||null)===(h.d||null)));})()`);
+    await wait(300);
+    eq($('coachOut').textContent.startsWith('✓ 最善手です'), true, $('coachOut').textContent);
+  });
+
+  await test('coach mode: a move that hangs the rook is flagged as a mistake', async ({ $, ev, setup, fin }) => {
+    setup(0);
+    $('coach').checked = true;
+    ev(`board[0]={t:'K',o:1,pr:false};board[80]={t:'K',o:0,pr:false};
+        board[39]={t:'R',o:0,pr:false};board[20]={t:'G',o:1,pr:false};turn=0;`);
+    fin();
+    ev('coachKick();');
+    await wait(2600);
+    eq($('hintOut').textContent.startsWith('指南: おすすめは '), true, $('hintOut').textContent);
+    ev(`doPlayerMove(legalMoves().find(x=>x.f===39&&x.t===21));`);
+    await wait(2600);
+    const t = $('coachOut').textContent;
+    eq(/疑問手|悪手/.test(t), true, t);
+  });
+
   console.log(results.join('\n'));
   console.log(failed ? '\n' + failed + ' test(s) failed' : '\nall UI tests passed');
   process.exit(failed ? 1 : 0);

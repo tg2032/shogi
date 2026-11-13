@@ -112,6 +112,12 @@ button.danger{background:linear-gradient(180deg,#ff9d8f,#e86a58);border-color:#c
 .hintOut.busy{color:#e6b95a}
 .hintOut.msg{color:#7ec8ff;font-weight:700}
 .hintOut.fail{color:#ff9d8f}
+.coachLbl{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;cursor:pointer}
+.coachLbl input{width:18px;height:18px;margin:0}
+.coachOut{margin-top:6px;font-size:13px;line-height:1.55;min-height:1.5em;color:#cfd8e3;word-break:break-all}
+.coachOut.good{color:#8fe3a0}
+.coachOut.warn{color:#e6b95a}
+.coachOut.bad{color:#ff9d8f}
 .sq.hintA{box-shadow:inset 0 0 0 3px rgba(110,190,255,.95)}
 .sq.hintB{box-shadow:inset 0 0 0 3px rgba(110,190,255,.95),inset 0 0 22px rgba(110,190,255,.5)}
 button[disabled]{opacity:.5;cursor:default}
@@ -192,7 +198,9 @@ button[disabled]{opacity:.5;cursor:default}
           </select>
           <button id="btnSound" aria-pressed="true" aria-label="効果音">🔊</button>
         </div>
+        <label class="coachLbl"><input type="checkbox" id="coach"> 指南モード（おすすめ手と、指した手の評価）</label>
         <div id="hintOut" class="hintOut" role="status" aria-live="polite"></div>
+        <div id="coachOut" class="coachOut" role="status" aria-live="polite"></div>
       </div>
       <div class="card">
         <h2>局面の形勢</h2>
@@ -1047,12 +1055,14 @@ function resetGame(noStart){
   cancelHint();
   recordCounted=null;
   resignStreak=0;
+  coachPending=null;
+  coachText('');
   aiToken++;
   killWorker();
   render();
   closePromo();
   closeModal('overModal');
-  if(noStart!==true)startIfAI();
+  if(noStart!==true){startIfAI();coachKick();}
 }
 
 function dispName(p){
@@ -1239,6 +1249,11 @@ function tryTarget(i){
   return true;
 }
 function doPlayerMove(m){
+  coachPending=null;
+  if(coachOn()){
+    if(hintMove&&hintScore!==null&&hintKey===posKey())coachPending={bs:hintScore,txt:hintTxt,same:sameMv(hintMove,m)};
+    else coachText('（解析が間に合わなかったため、この手は評価していません）','');
+  }
   cancelHint();
   const txt=kifuOf(m);
   const kl=kifLineOf(m);
@@ -1348,6 +1363,7 @@ function afterMove(){
   }
   if(!gameOver&&inCheck(turn))sfx('chk');
   if(turn===ai)scheduleAI();
+  else coachKick();
   saveGame();
 }
 
@@ -1480,6 +1496,88 @@ function resignCheck(score){
   return false;
 }
 let hintMove=null,hintBusy=false,hintToken=0,hintReq=0,hintTimer=null,lastHintLevel=null;
+let hintScore=null,hintKey=null,hintTxt='',coachPending=null;
+function coachOn(){
+  const e=document.getElementById('coach');
+  return !!(e&&e.checked);
+}
+function coachText(t,cls){
+  const el=document.getElementById('coachOut');
+  if(!el)return;
+  if(el.textContent!==t)el.textContent=t;
+  const nc='coachOut'+(cls?' '+cls:'');
+  if(el.className!==nc)el.className=nc;
+}
+function moveTags(m){
+  const t=[];
+  if(m.d)t.push('持ち駒を打つ');
+  else if(board[m.t])t.push(dispName(board[m.t])+'を取る');
+  if(m.pr)t.push('成り');
+  return t.length?'［'+t.join('・')+'］':'';
+}
+function sameMv(a,b){
+  return !!a&&!!b&&a.f===b.f&&a.t===b.t&&!!a.pr===!!b.pr&&(a.d||null)===(b.d||null);
+}
+function coachJudge(p,v){
+  const C=3000;
+  const bs=Math.max(-C,Math.min(C,p.bs)),pv=Math.max(-C,Math.min(C,v));
+  const loss=bs-pv;
+  const r=Math.round(Math.max(0,loss)/10)*10;
+  const mine=moveLog[moveLog.length-1]||'';
+  if(loss<150)return {t:'◎ 好手です：'+mine+'（おすすめ '+p.txt+' とほぼ同じ価値）',c:'good'};
+  if(loss<300)return {t:'○ 悪くない手です：'+mine+'（最善より約'+r+'点下がりますが、許容範囲）',c:'good'};
+  if(loss<800)return {t:'△ 疑問手：'+mine+'（約'+r+'点下がります）。おすすめは '+p.txt+' でした。',c:'warn'};
+  return {t:'✕ 悪手：'+mine+'（約'+r+'点下がります）。おすすめは '+p.txt+' でした。「待った」でやり直せます。',c:'bad'};
+}
+function coachEval(p,cb){
+  if(p.same){
+    coachText('✓ 最善手です！ '+(moveLog[moveLog.length-1]||''),'good');
+    cb();
+    return;
+  }
+  const token=aiToken;
+  thinking=true;
+  render();
+  const level='hard',budget=1000;
+  const req=++hintReq;
+  let settled=false,timer=null;
+  const w=getWorker();
+  const done=s=>{
+    if(settled)return;
+    settled=true;
+    if(timer){clearTimeout(timer);timer=null;}
+    if(w){w.onmessage=null;w.onerror=null;}
+    if(token!==aiToken||gameOver)return;
+    if(typeof s==='number'&&isFinite(s)){
+      const j=coachJudge(p,-s);
+      coachText(j.t,j.c);
+    }
+    cb();
+  };
+  if(!w){
+    timer=setTimeout(()=>{
+      let s=null;
+      try{chooseAIMove(level,budget);s=rootScore;}catch(x){s=null;}
+      done(s);
+    },30);
+    return;
+  }
+  const payload=snapPosition();
+  payload.level=level;
+  payload.id=req;
+  payload.cap=budget;
+  w.onmessage=e=>{
+    const d=e.data||{};
+    if(d.id!==req)return;
+    done(d.err?null:d.s);
+  };
+  w.onerror=()=>{killWorker();done(null);};
+  timer=setTimeout(()=>{killWorker();done(null);},budget+6000);
+  try{w.postMessage(payload);}catch(x){killWorker();done(null);}
+}
+function coachKick(){
+  if(coachOn()&&!gameOver&&!thinking&&turn===me&&!hintBusy&&!hintMove)requestHint();
+}
 function hintText(t,cls){
   const el=document.getElementById('hintOut');
   if(!el)return;
@@ -1493,6 +1591,7 @@ function cancelHint(){
   if(hintBusy)killWorker();
   hintBusy=false;
   hintMove=null;
+  hintScore=null;
   if(hintTimer){clearTimeout(hintTimer);hintTimer=null;}
   hintText('');
 }
@@ -1526,8 +1625,11 @@ function requestHint(){
     if(typeof s==='number'&&isFinite(s)){
       const v=Math.round(s/10)*10;
       tail='（形勢 '+(v>0?'+':'')+v+'）';
-    }
-    hintText('ヒント: '+kifuOf(m)+tail,'msg');
+      hintScore=s;
+    }else hintScore=null;
+    hintKey=posKey();
+    hintTxt=kifuOf(m)+moveTags(m);
+    hintText((coachOn()?'指南: おすすめは ':'ヒント: ')+hintTxt+tail,'msg');
     render();
   };
   const w=getWorker();
@@ -1569,6 +1671,16 @@ function requestHint(){
   }
 }
 function scheduleAI(){
+  if(coachPending&&!gameOver&&turn===ai){
+    const p=coachPending;
+    coachPending=null;
+    coachEval(p,()=>{if(!gameOver&&turn===ai)scheduleAICore();});
+    return;
+  }
+  coachPending=null;
+  scheduleAICore();
+}
+function scheduleAICore(){
   aiT0=performance.now();
   if(!gameOver&&turn===ai&&declareInfo(ai).ok){
     endGame('lose','入玉宣言','相手が入玉宣言しました。あなたの負けです。');
@@ -1619,6 +1731,7 @@ function openModal(id,focusEl){
 function endGame(kind,title,sub){
   const first=!gameOver;
   cancelHint();
+  coachPending=null;
   gameOver=true;
   thinking=false;
   aiToken++;
@@ -1855,7 +1968,7 @@ function loadAutosave(){
     }
     me=o.me===1?1:0;ai=me^1;
     const ss=document.getElementById('side');if(ss)ss.value=String(me);
-    aiToken++;killWorker();cancelHint();
+    aiToken++;killWorker();cancelHint();coachPending=null;coachText('');
     let us=[];
     if(Array.isArray(o.undo)&&o.undo.length<=6){
       us=o.undo.filter(x=>validSnap(x,true));
@@ -1868,6 +1981,7 @@ function loadAutosave(){
     thinking=false;
     render();
     startIfAI();
+    coachKick();
     return true;
   }catch(x){try{resetGame();}catch(y){}return false;}
 }
@@ -1962,6 +2076,16 @@ if(typeof window!=='undefined'&&window.addEventListener){
 document.getElementById('btnNew').onclick=()=>{lsDel(SAVE_KEY);resetGame();};
 document.getElementById('btnAgain').onclick=()=>{lsDel(SAVE_KEY);resetGame();};
 (function(){
+  const c=document.getElementById('coach');
+  if(!c)return;
+  if(lsGet('shogi_coach')==='1')c.checked=true;
+  c.addEventListener('change',()=>{
+    lsSet('shogi_coach',c.checked?'1':'0');
+    if(c.checked)coachKick();
+    else{cancelHint();coachPending=null;coachText('');render();}
+  });
+})();
+(function(){
   const e=document.getElementById('side');
   if(!e)return;
   const v=lsGet('shogi_side');
@@ -2012,11 +2136,14 @@ document.getElementById('btnUndo').onclick=()=>{
   }while(turn!==me&&undoStack.length&&guard<6);
   gameOver=false;
   resignStreak=0;
+  coachPending=null;
+  coachText('');
   if(wasOver)undoRecordCounted();
   closeModal('overModal');
   render();
   saveGame();
   startIfAI();
+  coachKick();
 };
 document.getElementById('btnDeclare').onclick=()=>{
   if(gameOver||thinking||turn!==me)return;

@@ -1251,7 +1251,7 @@ function tryTarget(i){
 function doPlayerMove(m){
   coachPending=null;
   if(coachOn()){
-    if(hintMove&&hintScore!==null&&hintKey===posKey())coachPending={bs:hintScore,txt:hintTxt,same:sameMv(hintMove,m)};
+    if(hintMove&&hintCoach&&hintScore!==null&&hintKey===posKey())coachPending={bs:hintScore,txt:hintTxt,same:sameMv(hintMove,m)};
     else coachText('（解析が間に合わなかったため、この手は評価していません）','');
   }
   cancelHint();
@@ -1496,7 +1496,13 @@ function resignCheck(score){
   return false;
 }
 let hintMove=null,hintBusy=false,hintToken=0,hintReq=0,hintTimer=null,lastHintLevel=null;
-let hintScore=null,hintKey=null,hintTxt='',coachPending=null;
+let hintScore=null,hintKey=null,hintTxt='',hintCoach=false,coachPending=null;
+function hasWorkerApi(){
+  return typeof Worker!=='undefined'&&typeof Blob!=='undefined'&&typeof URL!=='undefined'&&!!URL.createObjectURL;
+}
+function coachBudget(){
+  return hasWorkerApi()?2000:600;
+}
 function coachOn(){
   const e=document.getElementById('coach');
   return !!(e&&e.checked);
@@ -1521,6 +1527,7 @@ function sameMv(a,b){
 function coachJudge(p,v){
   const C=3000;
   const bs=Math.max(-C,Math.min(C,p.bs)),pv=Math.max(-C,Math.min(C,v));
+  if(bs<=-C&&pv<=-C)return {t:'（すでに厳しい局面のため、この手の評価はできません。おすすめは '+p.txt+'）',c:''};
   const loss=bs-pv;
   const r=Math.round(Math.max(0,loss)/10)*10;
   const mine=moveLog[moveLog.length-1]||'';
@@ -1538,7 +1545,7 @@ function coachEval(p,cb){
   const token=aiToken;
   thinking=true;
   render();
-  const level='hard',budget=1000;
+  const level='hard',budget=coachBudget();
   const req=++hintReq;
   let settled=false,timer=null;
   const w=getWorker();
@@ -1576,7 +1583,7 @@ function coachEval(p,cb){
   try{w.postMessage(payload);}catch(x){killWorker();done(null);}
 }
 function coachKick(){
-  if(coachOn()&&!gameOver&&!thinking&&turn===me&&!hintBusy&&!hintMove)requestHint();
+  if(coachOn()&&!gameOver&&!thinking&&turn===me&&!hintBusy&&(!hintMove||!hintCoach))requestHint();
 }
 function hintText(t,cls){
   const el=document.getElementById('hintOut');
@@ -1612,7 +1619,8 @@ function requestHint(){
   render();
   const level='hard';
   lastHintLevel=level;
-  const budget=Math.min(BUDGET[level]||BUDGET.normal,2000);
+  const coach=coachOn();
+  const budget=coach?coachBudget():Math.min(BUDGET[level]||BUDGET.normal,2000);
   const done=(m,s)=>{
     if(token!==hintToken)return;
     hintBusy=false;
@@ -1628,8 +1636,9 @@ function requestHint(){
       hintScore=s;
     }else hintScore=null;
     hintKey=posKey();
+    hintCoach=coach;
     hintTxt=kifuOf(m)+moveTags(m);
-    hintText((coachOn()?'指南: おすすめは ':'ヒント: ')+hintTxt+tail,'msg');
+    hintText((coach?'指南: おすすめは ':'ヒント: ')+hintTxt+tail,'msg');
     render();
   };
   const w=getWorker();
@@ -2157,7 +2166,7 @@ document.getElementById('btnResign').onclick=()=>{
 };
 
 resetGame(true);
-if(!loadAutosave())startIfAI();
+if(!loadAutosave()){startIfAI();coachKick();}
 </script>
 </body>
 </html>

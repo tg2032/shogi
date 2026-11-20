@@ -37,6 +37,11 @@ async function test(name, fn) {
 }
 const eq = (a, b, msg) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error((msg || '') + ' expected ' + JSON.stringify(b) + ' got ' + JSON.stringify(a)); };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const waitFor = async (cond, ms = 10000) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) { if (cond()) return true; await wait(50); }
+  return false;
+};
 
 (async () => {
   await test('page loads in sente mode with the status and no error bar', async ({ $, ev }) => {
@@ -242,10 +247,10 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await test('coach mode: recommends a move on your turn and praises playing it', async ({ $, ev }) => {
     $('coach').checked = true;
     ev('resetGame(true);coachKick();');
-    await wait(2600);
+    await waitFor(() => $('hintOut').textContent.startsWith('指南'));
     eq($('hintOut').textContent.startsWith('指南: おすすめは '), true, $('hintOut').textContent);
     ev(`(function(){const h=hintMove;doPlayerMove(legalMoves().find(x=>x.f===h.f&&x.t===h.t&&!!x.pr===!!h.pr&&(x.d||null)===(h.d||null)));})()`);
-    await wait(300);
+    await waitFor(() => $('coachOut').textContent !== '');
     eq($('coachOut').textContent.startsWith('✓ 最善手です'), true, $('coachOut').textContent);
   });
 
@@ -256,12 +261,47 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
         board[39]={t:'R',o:0,pr:false};board[20]={t:'G',o:1,pr:false};turn=0;`);
     fin();
     ev('coachKick();');
-    await wait(2600);
+    await waitFor(() => $('hintOut').textContent.startsWith('指南'));
     eq($('hintOut').textContent.startsWith('指南: おすすめは '), true, $('hintOut').textContent);
     ev(`doPlayerMove(legalMoves().find(x=>x.f===39&&x.t===21));`);
-    await wait(2600);
+    await waitFor(() => $('coachOut').textContent !== '');
     const t = $('coachOut').textContent;
     eq(/疑問手|悪手/.test(t), true, t);
+  });
+
+  {
+    // startup path: coach setting persisted, no autosave -> recommendation appears without any click
+    const dom = new JSDOM(html, { runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/shogi.html',
+      beforeParse(w) { w.localStorage.setItem('shogi_coach', '1'); } });
+    try {
+      const w = dom.window;
+      const ok = await waitFor(() => w.document.getElementById('hintOut').textContent.startsWith('指南'));
+      eq(ok, true, 'hintOut=' + w.document.getElementById('hintOut').textContent);
+      eq(w.document.getElementById('coach').checked, true);
+      results.push('ok   coach mode: persisted setting gives a recommendation right after page load');
+    } catch (e) {
+      failed++;
+      results.push('FAIL coach mode: persisted setting gives a recommendation right after page load\n     ' + (e && e.message || e));
+    } finally { dom.window.close(); }
+  }
+
+  await test('coach mode: a hint requested with coach off is not used as the evaluation baseline', async ({ $, ev }) => {
+    ev('resetGame(true);requestHint();');
+    await waitFor(() => $('hintOut').textContent.startsWith('ヒント'));
+    $('coach').checked = true;
+    ev(`doPlayerMove(legalMoves().find(x=>x.f===6*9+2&&x.t===5*9+2));`);
+    eq($('coachOut').textContent.includes('評価していません'), true, $('coachOut').textContent);
+  });
+
+  await test('coach mode: undo right after a coached move does not leave the board locked', async ({ $, ev }) => {
+    $('coach').checked = true;
+    ev('resetGame(true);coachKick();');
+    await waitFor(() => $('hintOut').textContent.startsWith('指南'));
+    ev(`(function(){const h=hintMove;const m=legalMoves().find(x=>!(x.f===h.f&&x.t===h.t));doPlayerMove(m);})()`);
+    await wait(100);
+    $('btnUndo').click();
+    await wait(300);
+    eq(ev('[thinking,turn,me,moveLog.length]'), [false, 0, 0, 0]);
   });
 
   console.log(results.join('\n'));

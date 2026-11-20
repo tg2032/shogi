@@ -2087,8 +2087,14 @@ document.getElementById('btnAgain').onclick=()=>{lsDel(SAVE_KEY);resetGame();};
 (function(){
   const c=document.getElementById('coach');
   if(!c)return;
+  const syncLive=()=>{
+    const h=document.getElementById('hintOut');
+    if(h)h.setAttribute('aria-live',c.checked?'off':'polite');
+  };
   if(lsGet('shogi_coach')==='1')c.checked=true;
+  syncLive();
   c.addEventListener('change',()=>{
+    syncLive();
     lsSet('shogi_coach',c.checked?'1':'0');
     if(c.checked)coachKick();
     else{cancelHint();coachPending=null;coachText('');render();}

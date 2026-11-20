@@ -304,6 +304,17 @@ const waitFor = async (cond, ms = 10000) => {
     eq(ev('[thinking,turn,me,moveLog.length]'), [false, 0, 0, 0]);
   });
 
+  await test('coach mode: the hint region stops announcing while the coach region announces', async ({ $, w }) => {
+    eq($('hintOut').getAttribute('aria-live'), 'polite');
+    $('coach').checked = true;
+    $('coach').dispatchEvent(new w.Event('change'));
+    eq($('hintOut').getAttribute('aria-live'), 'off');
+    eq($('coachOut').getAttribute('aria-live'), 'polite');
+    $('coach').checked = false;
+    $('coach').dispatchEvent(new w.Event('change'));
+    eq($('hintOut').getAttribute('aria-live'), 'polite');
+  });
+
   console.log(results.join('\n'));
   console.log(failed ? '\n' + failed + ' test(s) failed' : '\nall UI tests passed');
   process.exit(failed ? 1 : 0);

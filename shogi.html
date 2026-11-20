@@ -1582,6 +1582,14 @@ function coachEval(p,cb){
   timer=setTimeout(()=>{killWorker();done(null);},budget+6000);
   try{w.postMessage(payload);}catch(x){killWorker();done(null);}
 }
+function bookMove(){
+  // Coach only: the first move of each side follows the standard opening instead of the engine's arbitrary pick among near-equal moves.
+  let f=-1,t=-1;
+  if(me===0&&moveLog.length===0){f=6*9+2;t=5*9+2;}
+  else if(me===1&&moveLog.length===1&&(moveLog[0]==='７六歩'||moveLog[0]==='２六歩')){f=2*9+6;t=3*9+6;}
+  if(f<0)return null;
+  return legalMoves().find(x=>!x.d&&x.f===f&&x.t===t&&!x.pr)||null;
+}
 function coachKick(){
   if(coachOn()&&!gameOver&&!thinking&&turn===me&&!hintBusy&&(!hintMove||!hintCoach))requestHint();
 }
@@ -1628,6 +1636,7 @@ function requestHint(){
     hintTimer=null;
     if(gameOver||turn!==me||thinking){hintText('');render();return;}
     if(!m){hintFail();return;}
+    if(coach){const bk=bookMove();if(bk)m=bk;}
     hintMove=m;
     let tail='';
     if(typeof s==='number'&&isFinite(s)){

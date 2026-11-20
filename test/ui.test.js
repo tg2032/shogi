@@ -315,6 +315,20 @@ const waitFor = async (cond, ms = 10000) => {
     eq($('hintOut').getAttribute('aria-live'), 'polite');
   });
 
+  await test('coach mode: first moves follow the standard opening (sente 7g-7f, gote 3c-3d)', async ({ $, ev }) => {
+    $('coach').checked = true;
+    ev('resetGame(true);coachKick();');
+    await waitFor(() => $('hintOut').textContent.startsWith('指南'));
+    eq($('hintOut').textContent.startsWith('指南: おすすめは ７六歩'), true, $('hintOut').textContent);
+    $('side').value = '1';
+    ev('resetGame(true);');
+    ev(`(function(){const m=legalMoves().find(x=>x.f===6*9+2&&x.t===5*9+2);moveLog.push(kifuOf(m));kifLog.push(kifLineOf(m));undoStack.push(snapshot());applyMove(m);lastMove={f:m.f,t:m.t};pushRep(0,false);legalC=null;render();})()`);
+    eq(ev('[me,turn,moveLog.length]'), [1, 1, 1]);
+    ev('coachKick();');
+    await waitFor(() => $('hintOut').textContent.startsWith('指南'));
+    eq($('hintOut').textContent.startsWith('指南: おすすめは ３四歩'), true, $('hintOut').textContent);
+  });
+
   console.log(results.join('\n'));
   console.log(failed ? '\n' + failed + ' test(s) failed' : '\nall UI tests passed');
   process.exit(failed ? 1 : 0);
